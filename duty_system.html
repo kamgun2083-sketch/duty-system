@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>कार्यालय ड्युटी व्यवस्थापन प्रणाली</title>
+  <title>कार्यालय ड्युटी व्यवस्थापन प्रणाली (Cloud Connected)</title>
   <style>
     :root{
       --navy:#0b2b4c;--deep:#061d35;--blue:#175a96;--slate:#e8eef4;--ink:#172536;
@@ -136,7 +136,6 @@
      <button class="tab" id="reserveTab" type="button" role="tab" aria-selected="false" aria-controls="reserveSheet">२. बाहिरी रिजर्भ ड्युटी</button>
     </nav>
     <main>
-     <!-- आन्तरिक पेरिमिटर ड्युटी पाना -->
      <section class="sheet" id="internalSheet" role="tabpanel" aria-labelledby="internalTab">
       <h2 class="sheet-title" style="color: rgb(11, 43, 76); font-weight: 800; font-size: 21px;">आन्तरिक पेरिमिटर ड्युटी</h2>
       <div class="rule"></div>
@@ -162,10 +161,7 @@
       <p class="notice" id="koteshworNotice"></p>
       <div class="cards" id="internalCards"></div>
 
-      <!-- क्वाटर गार्ड ड्यूटी खण्ड (Quarter Guard Duty Section) -->
       <div class="special-divider"><span class="special-label">क्वाटर गार्ड ड्युटी</span></div>
-      
-      <!-- क्वाटरगार्डमा जाने समय मेनुल्ली राख्ने अपसन -->
       <div class="notice" id="quarterGuardNoticeBox">
         <span>क्वाटरगार्डमा जाने समय:</span>
         <input type="text" id="quarterGuardTimeInput" placeholder="जस्तै: ०६:०० बजे" style="max-width: 160px;" disabled>
@@ -185,7 +181,6 @@
       </div>
      </section>
 
-     <!-- बाहिरी रिजर्भ ड्युटी पाना -->
      <section class="sheet" id="reserveSheet" role="tabpanel" aria-labelledby="reserveTab" hidden="">
       <h2 class="sheet-title" style="color: rgb(11, 43, 76); font-weight: 800; font-size: 21px;">बाहिरी रिजर्भ ड्युटी</h2>
       <div class="rule"></div>
@@ -231,12 +226,11 @@
   <script>
   (() => {
     "use strict";
-    const KEY = "nepal-police-duty-management-v12";
-    const OLD_KEYS = ["nepal-police-duty-management-v11","nepal-police-duty-management-v10","nepal-police-duty-management-v9","nepal-police-duty-management-v8"];
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx-Jpo42JlzQzKpxRXRTBV_OD53usWbZABICHiyf_Rd6AEWEjpItIf2hpWEO0Ho6tqL/exec";
     const nepDigits = "०१२३४५६७८९";
     const times = ["","०६ः००-१०ः०० बजे","१०ः००-१४ः०० बजे","१४ः००-१८ः०० बजे","१८ः००-२२ः०० बजे","२२ः००-०२ः०० बजे","०२ः००-०६ः०० बजे","custom"];
     
-    let isAdmin = false; // By default view-only mode
+    let isAdmin = false;
     
     const groupedData = {
       "प्र.ब.ह.": [
@@ -298,7 +292,7 @@
       const find = name => personnel.find(p => p.name === name)?.id || "";
       return {
         version:12,
-        adminPassword:"admin123", // Default admin password
+        adminPassword:"admin123",
         settings:{
           officeName:"काठमाडौं उपत्यका सशस्त्र प्रहरी गण नं. २, महाराजगंज",
           officeSubtitle:"ड्युटी खटन विवरण",
@@ -402,13 +396,25 @@
     }
 
     function valid(raw) { return raw && typeof raw === "object" && Array.isArray(raw.personnel) && Array.isArray(raw.internalPosts) && Array.isArray(raw.reservePosts); }
-    function restore() {
+    
+    // Cloud Restore (Load from Google Sheet)
+    async function restoreFromCloud() {
       try {
-        let raw = localStorage.getItem(KEY);
-        if (!raw) for (const key of OLD_KEYS) { raw = localStorage.getItem(key); if (raw) break; }
-        const parsed = JSON.parse(raw);
-        if (valid(parsed)) { state = migrate(parsed); return true; }
-      } catch (_) {}
+        status("क्लाउडबाट डेटा लोड हुँदैछ...", "warning");
+        let response = await fetch(WEB_APP_URL);
+        let raw = await response.json();
+        if (raw && Object.keys(raw).length > 0 && valid(raw)) {
+          state = migrate(raw);
+          render();
+          status("क्लाउडबाट सफलतापूर्वक डेटा लोड भयो");
+          return true;
+        }
+      } catch (e) {
+        console.error(e);
+        status("क्लाउड डेटा लोड गर्न असफल, पूर्वनिर्धारित डेटा प्रयोग गरिँदैछ", "error");
+      }
+      state = defaults();
+      render();
       return false;
     }
 
@@ -417,13 +423,27 @@
       el.textContent = message + " · " + new Date().toLocaleTimeString("ne-NP",{hour:"2-digit",minute:"2-digit"});
       el.className = "status no-print" + (type === "error" ? " error" : type === "warning" ? " warning" : "");
     }
-    function save(message="") {
+    
+    // Cloud Save (Save to Google Sheet)
+    async function saveToCloud(message="") {
       try {
         state.lastSavedAt = new Date().toLocaleString("ne-NP",{dateStyle:"short",timeStyle:"short"});
-        localStorage.setItem(KEY,JSON.stringify(state));
         renderSummary();
+        status("क्लाउडमा सेभ हुँदैछ...", "warning");
+        
+        await fetch(WEB_APP_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(state)
+        });
+        
         if (message) status(message);
-      } catch (_) { status("डाटा सुरक्षित गर्न सकिएन","error"); }
+        else status("क्लाउडमा सफलतापूर्वक सेभ भयो");
+      } catch (err) {
+        console.error(err);
+        status("क्लाउडमा सेभ गर्न असफल भयो", "error");
+      }
     }
 
     function person(id) { return state.personnel.find(p => p.id === id); }
@@ -458,13 +478,13 @@
     function option(value,text,selected) { const el=document.createElement("option");el.value=value;el.textContent=text;el.selected=value===selected;return el; }
     function selectRank(entry) {
       const el=document.createElement("select");el.dataset.action="rank";el.dataset.row=entry.id;
-      el.disabled = !isAdmin; // Only admin can edit
+      el.disabled = !isAdmin;
       el.append(option("","पद छान्नुहोस्",!entry.rank));state.ranks.forEach(rank => el.append(option(rank,rank,entry.rank===rank)));return el;
     }
     
     function selectPerson(entry) {
       const el=document.createElement("select");el.dataset.action="person";el.dataset.row=entry.id;
-      el.disabled = !isAdmin; // Only admin can edit
+      el.disabled = !isAdmin;
       el.append(option("","नाम छान्नुहोस्",!entry.personnelId));
       
       const filteredPeople = entry.rank 
@@ -481,7 +501,7 @@
 
     function selectTime(entry) {
       const el=document.createElement("select");el.dataset.action="time";el.dataset.row=entry.id;
-      el.disabled = !isAdmin; // Only admin can edit
+      el.disabled = !isAdmin;
       el.append(option("","समय चयन गर्नुहोस्",!entry.time));
       times.slice(1).forEach(time => el.append(option(time,time==="custom"?"आफैं समय लेख्नुहोस्":time,entry.time===time)));
       return el;
@@ -501,7 +521,7 @@
       if(item.location||item.description){const meta=document.createElement("p");meta.className="card-meta";meta.textContent=[item.location,item.description].filter(Boolean).join(" — ");head.append(meta);}
       
       const actions=document.createElement("div");actions.className="card-actions";
-      if(isAdmin){ // Show editing actions only if admin
+      if(isAdmin){
         const controls = isQuarterGuard 
           ? [["addRow","ड्युटी पंक्ति थप्नुहोस्",""]]
           : isSpecial 
@@ -517,27 +537,26 @@
         const line=document.createElement("div");line.className="row" + (isReserve ? " reserve-row" : "");line.dataset.rowwrap=entry.id;
         const num=document.createElement("span");num.className="row-index";num.textContent=nep(index+1);
         const remove=document.createElement("button");remove.type="button";remove.className="icon-button no-print";remove.dataset.action="deleteRow";remove.dataset.post=item.id;remove.dataset.row=entry.id;remove.setAttribute("aria-label","ड्युटी पंक्ति हटाउनुहोस्");remove.textContent="×";
-        if(!isAdmin) remove.style.display = "none"; // Hide delete row for non-admin
+        if(!isAdmin) remove.style.display = "none";
         
         const display=document.createElement("div");display.className="row-display";
         const p=person(entry.personnelId); 
         const who=[entry.rank || p?.rank,p?.name || (entry.personnelId ? "अज्ञात/हटाइएको जनशक्ति" : "कर्मचारी चयन गरिएको छैन")].filter(Boolean).join(" ");
         
-        // Cafiyat (Remarks) input element creation
         const cafiyatInput = document.createElement("input");
         cafiyatInput.dataset.action = "cafiyat";
         cafiyatInput.dataset.row = entry.id;
         cafiyatInput.placeholder = "कैफियत (RP, हतियार आदि)";
         cafiyatInput.value = entry.remarks || "";
         cafiyatInput.className = "cafiyat-input";
-        cafiyatInput.disabled = !isAdmin; // Only admin can edit
+        cafiyatInput.disabled = !isAdmin;
 
         if (isReserve) {
           display.textContent = who + (entry.remarks ? " [" + entry.remarks + "]" : "");
           line.append(num,selectRank(entry),selectPerson(entry),cafiyatInput,remove,display);
         } else {
           const custom=document.createElement("input");custom.dataset.action="customTime";custom.dataset.row=entry.id;custom.placeholder="जस्तै ०७ः३०-११ः३० बजे";custom.value=entry.customTime||"";custom.className="custom-time";custom.hidden=entry.time!=="custom";
-          custom.disabled = !isAdmin; // Only admin can edit
+          custom.disabled = !isAdmin;
           const time=dutyTime(entry);
           display.textContent = who + " — समय: ";
           const timeText = document.createElement("span");
@@ -616,7 +635,6 @@
       if (prefix === "internal") $(prefix+"ShiftSelect").value=d.shift || "दिन";
       $(prefix+"DateHelp").textContent=help;$(prefix+"DateHelp").hidden=!help;
       
-      // Toggle disabled state based on admin status
       $(prefix+"DateSystem").disabled = !isAdmin;
       $(prefix+"NepaliDate").disabled = !isAdmin;
       $(prefix+"Date").disabled = !isAdmin;
@@ -651,7 +669,6 @@
       $("internalTab").setAttribute("aria-selected",String(state.activeTab==="internal"));
       $("reserveTab").setAttribute("aria-selected",String(state.activeTab==="reserve"));
       
-      // Show/Hide admin-only buttons in toolbar
       $("addPostBtn").style.display = isAdmin ? "inline-flex" : "none";
       $("peopleBtn").style.display = isAdmin ? "inline-flex" : "none";
       $("settingsBtn").style.display = isAdmin ? "inline-flex" : "none";
@@ -668,7 +685,6 @@
     function closeModal(){$("modalBackdrop").classList.remove("open");$("modalBackdrop").setAttribute("aria-hidden","true");$("modalContent").replaceChildren();lastFocus?.focus();}
     function field(label,id,value="",type="text"){const wrap=document.createElement("div");wrap.className="form-field";const lab=document.createElement("label");lab.htmlFor=id;lab.textContent=label;const input=document.createElement(type==="textarea"?"textarea":"input");input.id=id;input.value=value;wrap.append(lab,input);return wrap;}
 
-    // Admin login modal function
     function promptLogin(onSuccess) {
       const form = document.createElement("form"), grid = document.createElement("div");
       grid.className = "modal-grid";
@@ -700,7 +716,7 @@
       const form=document.createElement("form"),grid=document.createElement("div");grid.className="modal-grid";
       grid.append(field("पोष्टको नाम वा नम्बर (ट्रक शब्द प्रयोग नगर्ने)","postTitle",existing?.title||""),field("स्थान/शीर्षक","postLocation",existing?.location||""),field("वैकल्पिक विवरण","postDescription",existing?.description||"","textarea"));grid.lastChild.classList.add("full");form.append(grid);
       const actions=document.createElement("div");actions.className="modal-actions";const cancel=document.createElement("button");cancel.type="button";cancel.className="action";cancel.textContent="रद्द गर्नुहोस्";cancel.onclick=closeModal;const submit=document.createElement("button");submit.type="submit";submit.className="action primary";submit.textContent="सुरक्षित गर्नुहोस्";actions.append(cancel,submit);form.append(actions);
-      form.onsubmit=e=>{e.preventDefault();const title=safe($("postTitle").value).replace(/ट्रक/g, "").trim();if(!title){status("पोष्टको नाम लेख्नुहोस्","warning");return;}if(existing){existing.title=title;existing.location=safe($("postLocation").value);existing.description=safe($("postDescription").value);}else{const p=post(title,safe($("postLocation").value),safe($("postDescription").value),[state.activeTab==="internal"?row():row()]);if(state.activeTab==="internal")state.internalPosts.push(p);else state.reservePosts.push(p);}closeModal();render();save("पोष्ट सुरक्षित भयो");};
+      form.onsubmit=e=>{e.preventDefault();const title=safe($("postTitle").value).replace(/ट्रक/g, "").trim();if(!title){status("पोष्टको नाम लेख्नुहोस्","warning");return;}if(existing){existing.title=title;existing.location=safe($("postLocation").value);existing.description=safe($("postDescription").value);}else{const p=post(title,safe($("postLocation").value),safe($("postDescription").value),[state.activeTab==="internal"?row():row()]);if(state.activeTab==="internal")state.internalPosts.push(p);else state.reservePosts.push(p);}closeModal();render();saveToCloud("पोष्ट सुरक्षित भयो");};
       openModal(existing?"पोष्ट सम्पादन":"नयाँ पोष्ट थप्नुहोस्",form);
     }
     function confirmModal(message,yes){
@@ -713,10 +729,10 @@
       const wrap=document.createElement("div"),form=document.createElement("form"),grid=document.createElement("div");grid.className="modal-grid";
       grid.append(field("जनशक्तिको नाम","personName",edit?.name||""),field("पद","personRank",edit?.rank||""),field("code (वैकल्पिक)","personCode",edit?.code||""),field("remarks (वैकल्पिक)","personRemarks",edit?.remarks||""));form.append(grid);
       const actions=document.createElement("div");actions.className="modal-actions";const saveBtn=document.createElement("button");saveBtn.className="action primary";saveBtn.type="submit";saveBtn.textContent=edit?"परिवर्तन सुरक्षित गर्नुहोस्":"जनशक्ति थप्नुहोस्";actions.append(saveBtn);form.append(actions);
-      form.onsubmit=e=>{e.preventDefault();const name=safe($("personName").value).trim(),rank=safe($("personRank").value).trim();if(!name||!rank){status("नाम र पद अनिवार्य छन्","warning");return;}if(!state.ranks.includes(rank))state.ranks.push(rank);const item=edit||{id:uid()};Object.assign(item,{name,rank,code:safe($("personCode").value),remarks:safe($("personRemarks").value)});if(!edit)state.personnel.push(item);save("जनशक्ति सुरक्षित भयो");peopleModal();};wrap.append(form);
+      form.onsubmit=e=>{e.preventDefault();const name=safe($("personName").value).trim(),rank=safe($("personRank").value).trim();if(!name||!rank){status("नाम र पद अनिवार्य छन्","warning");return;}if(!state.ranks.includes(rank))state.ranks.push(rank);const item=edit||{id:uid()};Object.assign(item,{name,rank,code:safe($("personCode").value),remarks:safe($("personRemarks").value)});if(!edit)state.personnel.push(item);saveToCloud("जनशक्ति सुरक्षित भयो");peopleModal();};wrap.append(form);
       const tools=document.createElement("div");tools.className="personnel-tools";const search=document.createElement("input");search.placeholder="नाम खोज्नुहोस्";const filter=document.createElement("select");filter.append(option("","सबै पद",true));state.ranks.forEach(r=>filter.append(option(r,r,false)));tools.append(search,filter);wrap.append(tools);
       const list=document.createElement("div");list.className="people-list";wrap.append(list);
-      const listRender=()=>{list.replaceChildren();const query=search.value.toLowerCase(),rank=filter.value;state.personnel.filter(p=>(!query||p.name.toLowerCase().includes(query))&&(!rank||p.rank===rank)).sort((a,b)=>a.name.localeCompare(b.name,"ne")).forEach(p=>{const item=document.createElement("div");item.className="person";const text=document.createElement("div");text.textContent=p.name;const small=document.createElement("small");small.textContent=p.rank+(p.code?" · "+p.code:"")+(p.remarks?" · "+p.remarks:"");text.append(small);const buttons=document.createElement("div");buttons.className="person-actions";const editBtn=document.createElement("button");editBtn.type="button";editBtn.className="small-action";editBtn.textContent="सम्पादन";editBtn.onclick=()=>peopleModal(p);const del=document.createElement("button");del.type="button";del.className="small-action danger";del.textContent="हटाउनुहोस्";del.onclick=()=>confirmModal("जनशक्ति हटाउने हो?",()=>{state.personnel=state.personnel.filter(x=>x.id!==p.id);save("जनशक्ति हटाइयो");peopleModal();});buttons.append(editBtn,del);item.append(text,buttons);list.append(item);});if(!list.children.length){const empty=document.createElement("p");empty.className="empty";empty.textContent="मिल्ने जनशक्ति भेटिएन।";list.append(empty);}};
+      const listRender=()=>{list.replaceChildren();const query=search.value.toLowerCase(),rank=filter.value;state.personnel.filter(p=>(!query||p.name.toLowerCase().includes(query))&&(!rank||p.rank===rank)).sort((a,b)=>a.name.localeCompare(b.name,"ne")).forEach(p=>{const item=document.createElement("div");item.className="person";const text=document.createElement("div");text.textContent=p.name;const small=document.createElement("small");small.textContent=p.rank+(p.code?" · "+p.code:"")+(p.remarks?" · "+p.remarks:"");text.append(small);const buttons=document.createElement("div");buttons.className="person-actions";const editBtn=document.createElement("button");editBtn.type="button";editBtn.className="small-action";editBtn.textContent="सम्पादन";editBtn.onclick=()=>peopleModal(p);const del=document.createElement("button");del.type="button";del.className="small-action danger";del.textContent="हटाउनुहोस्";del.onclick=()=>confirmModal("जनशक्ति हटाउने हो?",()=>{state.personnel=state.personnel.filter(x=>x.id!==p.id);saveToCloud("जनशक्ति हटाइयो");peopleModal();});buttons.append(editBtn,del);item.append(text,buttons);list.append(item);});if(!list.children.length){const empty=document.createElement("p");empty.className="empty";empty.textContent="मिल्ने जनशक्ति भेटिएन।";list.append(empty);}};
       search.oninput=listRender;filter.onchange=listRender;listRender();openModal("जनशक्ति व्यवस्थापन",wrap);
     }
 
@@ -746,7 +762,7 @@
           signatureName:safe($("signNameSetting").value)
         });
         state.adminPassword = safe($("adminPassSetting").value) || "admin123";
-        closeModal();render();save("प्रणाली सेटिङ सुरक्षित भयो");
+        closeModal();render();saveToCloud("प्रणाली सेटिङ सुरक्षित भयो");
       };
       openModal("प्रणाली सेटिङ",form);
     }
@@ -755,7 +771,7 @@
     
     function importJSON(file){
       if(!isAdmin) { promptLogin(()=>importJSON(file)); return; }
-      if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const raw=JSON.parse(String(e.target.result));if(!valid(raw))throw new Error();state=migrate(raw);render();save();status("Import सफल भयो");}catch(_){status("अवैध JSON फाइल वा संरचना","error");}finally{$("importFile").value="";}};reader.onerror=()=>status("फाइल पढ्न सकिएन","error");reader.readAsText(file);
+      if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const raw=JSON.parse(String(e.target.result));if(!valid(raw))throw new Error();state=migrate(raw);render();saveToCloud("Import सफल भयो");}catch(_){status("अवैध JSON फाइल वा संरचना","error");}finally{$("importFile").value="";}};reader.onerror=()=>status("फाइल पढ्न सकिएन","error");reader.readAsText(file);
     }
 
     function updateDate(type,field,value){
@@ -765,23 +781,23 @@
       if(field==="gregorian"){d.gregorianDate=value;if(!d.manualNepali){const converted=bsDate(value);if(converted)d.nepaliDate=converted;}}
       if(field==="nepali"){d.nepaliDate=safe(value);d.manualNepali=Boolean(value.trim());}
       if(field==="shift") d.shift=value;
-      render();save("विवरण सुरक्षित भयो");
+      render();saveToCloud("विवरण सुरक्षित भयो");
     }
     
     function todayNepali(type){
       if(!isAdmin) return;
       const converted=bsDate(today());
-      if(converted){const d=dateData(type);d.nepaliDate=converted;d.manualNepali=true;d.dateSystem="nepali";render();save("आजको नेपाली मिति प्रयोग गरियो");}
+      if(converted){const d=dateData(type);d.nepaliDate=converted;d.manualNepali=true;d.dateSystem="nepali";render();saveToCloud("आजको नेपाली मिति प्रयोग गरियो");}
       else status("नेपाली मिति आफैं लेख्नुहोस्","warning");
     }
 
     document.addEventListener("click",e=>{
       const action=e.target.dataset.action;if(!action)return;
       if(!isAdmin){ promptLogin(); return; }
-      if(action==="addRow"){getPost(e.target.dataset.post).rows.push(row());render();save("ड्युटी पंक्ति थपियो");}
+      if(action==="addRow"){getPost(e.target.dataset.post).rows.push(row());render();saveToCloud("ड्युटी पंक्ति थपियो");}
       if(action==="editPost")postModal(getPost(e.target.dataset.post));
-      if(action==="deletePost"){const p=getPost(e.target.dataset.post);confirmModal("‘"+p.title+"’ पोष्ट हटाउने हो?",()=>{const key=state.internalPosts.includes(p)?"internalPosts":"reservePosts";state[key]=state[key].filter(x=>x.id!==p.id);render();save("पोष्ट हटाइयो");});}
-      if(action==="deleteRow"){const p=getPost(e.target.dataset.post);p.rows=p.rows.filter(x=>x.id!==e.target.dataset.row);render();save("ड्युटी पंक्ति हटाइयो");}
+      if(action==="deletePost"){const p=getPost(e.target.dataset.post);confirmModal("‘"+p.title+"’ पोष्ट हटाउने हो?",()=>{const key=state.internalPosts.includes(p)?"internalPosts":"reservePosts";state[key]=state[key].filter(x=>x.id!==p.id);render();saveToCloud("पोष्ट हटाइयो");});}
+      if(action==="deleteRow"){const p=getPost(e.target.dataset.post);p.rows=p.rows.filter(x=>x.id!==e.target.dataset.row);render();saveToCloud("ड्युटी पंक्ति हटाइयो");}
     });
 
     document.addEventListener("change",e=>{
@@ -791,10 +807,10 @@
         entry.rank=e.target.value;
         entry.personnelId="";
         render();
-        save("पद परिवर्तन सुरक्षित भयो");
+        saveToCloud("पद परिवर्तन सुरक्षित भयो");
       }
-      if(action==="person"){entry.personnelId=e.target.value;render();save("जनशक्ति चयन सुरक्षित भयो");}
-      if(action==="time"){entry.time=e.target.value;if(entry.time!=="custom")entry.customTime="";render();save("समय सुरक्षित भयो");}
+      if(action==="person"){entry.personnelId=e.target.value;render();saveToCloud("जनशक्ति चयन सुरक्षित भयो");}
+      if(action==="time"){entry.time=e.target.value;if(entry.time!=="custom")entry.customTime="";render();saveToCloud("समय सुरक्षित भयो");}
     });
 
     document.addEventListener("input",e=>{
@@ -803,11 +819,11 @@
       if(e.target.dataset.action==="customTime"&&entry){
         entry.customTime=safe(e.target.value);
         const type=(state.internalPosts.some(p=>p.rows.includes(entry))||state.koteshworPost.rows.includes(entry)||state.quarterGuardPost.rows.includes(entry))?"internal":"reserve";
-        warnings(type);save();
+        warnings(type);saveToCloud();
       }
       if(e.target.dataset.action==="cafiyat"&&entry){
         entry.remarks=safe(e.target.value);
-        save();
+        saveToCloud();
       }
     });
     
@@ -818,8 +834,8 @@
     $("importFile").onchange=e=>importJSON(e.target.files[0]);
     $("printBtn").onclick=()=>window.print();
     
-    $("resetBtn").onclick=()=>confirmModal("सम्पूर्ण data प्रारम्भिक अवस्थामा फर्काउने हो?",()=>{state=defaults();render();save("प्रारम्भिक अवस्थामा फर्काइयो");});
-    $("clearBtn").onclick=()=>confirmModal("स्थानीय रूपमा सुरक्षित सबै data हटाउने हो?",()=>{localStorage.removeItem(KEY);OLD_KEYS.forEach(k=>localStorage.removeItem(k));state=defaults();render();save("स्थानीय data हटाइयो");});
+    $("resetBtn").onclick=()=>confirmModal("सम्पूर्ण data प्रारम्भिक अवस्थामा फर्काउने हो?",()=>{state=defaults();render();saveToCloud("प्रारम्भिक अवस्थामा फर्काइयो");});
+    $("clearBtn").onclick=()=>confirmModal("स्थानीय रूपमा सुरक्षित सबै data हटाउने हो?",()=>{state=defaults();render();saveToCloud("डेटा रिसेट गरियो");});
     
     $("authBtn").onclick = () => {
       if(isAdmin) {
@@ -831,8 +847,8 @@
       }
     };
 
-    $("internalTab").onclick=()=>{state.activeTab="internal";render();save();};
-    $("reserveTab").onclick=()=>{state.activeTab="reserve";render();save();};
+    $("internalTab").onclick=()=>{state.activeTab="internal";render();saveToCloud();};
+    $("reserveTab").onclick=()=>{state.activeTab="reserve";render();saveToCloud();};
     
     $("internalDateSystem").onchange=e=>updateDate("internal","system",e.target.value);
     $("reserveDateSystem").onchange=e=>updateDate("reserve","system",e.target.value);
@@ -850,20 +866,21 @@
     $("reserveTimeInput").oninput=e=>{
       if(!isAdmin) return;
       state.reserveTimeText=safe(e.target.value);
-      save();
+      saveToCloud();
     };
 
     $("quarterGuardTimeInput").oninput=e=>{
       if(!isAdmin) return;
       state.quarterGuardTimeText=safe(e.target.value);
-      save();
+      saveToCloud();
     };
 
     $("modalClose").onclick=closeModal;
     $("modalBackdrop").onclick=e=>{if(e.target===$("modalBackdrop"))closeModal();};
     document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("modalBackdrop").classList.contains("open"))closeModal();});
     
-    const restored=restore();render();if(restored)status("डाटा पुनः लोड भयो");
+    // Page load huda cloud bata data tanne
+    restoreFromCloud();
   })();
   </script>
 </body>
