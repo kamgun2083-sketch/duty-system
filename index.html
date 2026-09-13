@@ -128,6 +128,7 @@
      <button class="action primary" id="printBtn" type="button">प्रिन्ट / PDF</button> 
      <button class="action" id="resetBtn" type="button">प्रारम्भिक अवस्थामा फर्काउनुहोस्</button> 
      <button class="action danger" id="clearBtn" type="button">स्थानीय data हटाउनुहोस्</button>
+     <button class="action primary" id="manualSaveBtn" type="button" style="background:#166534; color:#fff;">Save / Submit (सेभ गर्नुहोस्)</button>
      <button class="action" id="authBtn" type="button" style="background:#166534; color:#fff;">लगइन / एडमिन बन्नुहोस्</button>
     </section>
     <div class="status no-print" id="status" role="status" aria-live="polite"></div>
@@ -314,7 +315,7 @@
         koteshworPost:post("कोटेश्वर विशेष ड्युटी","कोटेश्वर","फुलगियरमा पानी वर्षादी सहित",[row()]),
         reservePosts:[
           post("R-1","बाहिरी रिजर्भ","",[row("प्र.ब.ह.",find("अम्मर सिंह ठकुरी"),"","",""), row("प्र.ह.",find("अनिता शर्मा"),"","","")]),
-          post("R-2","बाहिरी रिजर्भ","",[row("प्र.ज.",find("रेशम बि.क."),"","","")])
+          post("R-2","बाहिरी रिजर्भ","",[row("प्र.ज.",find("रेशम बि.ค."),"","","")])
         ],
         activeTab:"internal",
         dates:{
@@ -834,6 +835,15 @@
     $("importFile").onchange=e=>importJSON(e.target.files[0]);
     $("printBtn").onclick=()=>window.print();
     
+    // Manual Save / Submit button handler
+    $("manualSaveBtn").onclick = () => {
+      if(!isAdmin) {
+        promptLogin(() => saveToCloud("डेटा सफलतापूर्वक सेभ / सबमिट भयो!"));
+        return;
+      }
+      saveToCloud("डेटा सफलतापूर्वक सेभ / सबमिट भयो!");
+    };
+
     $("resetBtn").onclick=()=>confirmModal("सम्पूर्ण data प्रारम्भिक अवस्थामा फर्काउने हो?",()=>{state=defaults();render();saveToCloud("प्रारम्भिक अवस्थामा फर्काइयो");});
     $("clearBtn").onclick=()=>confirmModal("स्थानीय रूपमा सुरक्षित सबै data हटाउने हो?",()=>{state=defaults();render();saveToCloud("डेटा रिसेट गरियो");});
     
