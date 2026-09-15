@@ -315,7 +315,7 @@
         koteshworPost:post("कोटेश्वर विशेष ड्युटी","कोटेश्वर","फुलगियरमा पानी वर्षादी सहित",[row()]),
         reservePosts:[
           post("R-1","बाहिरी रिजर्भ","",[row("प्र.ब.ह.",find("अम्मर सिंह ठकुरी"),"","",""), row("प्र.ह.",find("अनिता शर्मा"),"","","")]),
-          post("R-2","बाहिरी रिजर्भ","",[row("प्र.ज.",find("रेशम बि.ค."),"","","")])
+          post("R-2","बाहिरी रिजर्भ","",[row("प्र.ज.",find("रेशम बि.क."),"","","")])
         ],
         activeTab:"internal",
         dates:{
@@ -398,7 +398,6 @@
 
     function valid(raw) { return raw && typeof raw === "object" && Array.isArray(raw.personnel) && Array.isArray(raw.internalPosts) && Array.isArray(raw.reservePosts); }
     
-    // Cloud Restore (Load from Google Sheet)
     async function restoreFromCloud() {
       try {
         status("क्लाउडबाट डेटा लोड हुँदैछ...", "warning");
@@ -425,7 +424,6 @@
       el.className = "status no-print" + (type === "error" ? " error" : type === "warning" ? " warning" : "");
     }
     
-    // Cloud Save (Save to Google Sheet)
     async function saveToCloud(message="") {
       try {
         state.lastSavedAt = new Date().toLocaleString("ne-NP",{dateStyle:"short",timeStyle:"short"});
@@ -835,7 +833,6 @@
     $("importFile").onchange=e=>importJSON(e.target.files[0]);
     $("printBtn").onclick=()=>window.print();
     
-    // Manual Save / Submit button handler
     $("manualSaveBtn").onclick = () => {
       if(!isAdmin) {
         promptLogin(() => saveToCloud("डेटा सफलतापूर्वक सेभ / सबमिट भयो!"));
@@ -889,7 +886,6 @@
     $("modalBackdrop").onclick=e=>{if(e.target===$("modalBackdrop"))closeModal();};
     document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("modalBackdrop").classList.contains("open"))closeModal();});
     
-    // Page load huda cloud bata data tanne
     restoreFromCloud();
   })();
   </script>
